@@ -40,7 +40,7 @@ pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
             #(#attr_methods)*
 
-            pub fn build(&mut self) -> std::result::Result<#ident, Box<dyn std::error::Error>> {
+            pub fn build(&mut self) -> std::result::Result<#ident, std::boxed::Box<dyn std::error::Error>> {
                 Ok(#ident {
                     #(#build_fn_definition,)*
                 })
@@ -79,7 +79,7 @@ fn generate_builder_fields_definition(
         let ty = &field.ty;
         if let (true, _) = is_option(field) {
             quote::quote! {
-                #ident: #ty
+                #ident: std::option::#ty
             }
         } else {
             quote::quote! {
@@ -157,10 +157,11 @@ fn generate_attr_methods(
                 .expect("failed parsing as name-value expr");
 
             if quote::format_ident!("{}", parsed.path.get_ident().unwrap()) != "each".to_string() {
-                panic!("Unexpected attribute key");
-            }
-
-            if let syn::Expr::Lit(syn::ExprLit {
+                use syn::spanned::Spanned;
+                syn::Error::new(parsed.path.span(), r#"expected `builder(each = "...")`"#)
+                    .to_compile_error()
+                    .into()
+            } else if let syn::Expr::Lit(syn::ExprLit {
                 lit: syn::Lit::Str(literal),
                 ..
             }) = parsed.value
