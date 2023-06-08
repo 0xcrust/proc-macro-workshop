@@ -57,10 +57,7 @@ fn is_option(field: &syn::Field) -> (bool, Option<syn::PathSegment>) {
         path: syn::Path { segments, .. },
     }) = &field.ty
     {
-        if let Some(found) = segments
-            .iter()
-            .find(|segment| segment.ident.to_string() == "Option".to_string())
-        {
+        if let Some(found) = segments.iter().find(|segment| segment.ident == "Option") {
             (true, Some(found.clone()))
         } else {
             (false, None)
@@ -156,18 +153,17 @@ fn generate_attr_methods(
                 .parse_args()
                 .expect("failed parsing as name-value expr");
 
-            if quote::format_ident!("{}", parsed.path.get_ident().unwrap()) != "each".to_string() {
+            if parsed.path.get_ident().unwrap() != "each" {
                 use syn::spanned::Spanned;
                 syn::Error::new(parsed.path.span(), r#"expected `builder(each = "...")`"#)
                     .to_compile_error()
-                    .into()
             } else if let syn::Expr::Lit(syn::ExprLit {
                 lit: syn::Lit::Str(literal),
                 ..
             }) = parsed.value
             {
                 let new_fn_ident = literal.value();
-                if new_fn_ident == field_ident.to_string() {
+                if *field_ident == new_fn_ident {
                     quote::quote! {}
                 } else {
                     let inner_type = if let syn::Type::Path(syn::TypePath {
@@ -175,9 +171,8 @@ fn generate_attr_methods(
                         path: syn::Path { segments, .. },
                     }) = &field.ty
                     {
-                        if let Some(segment) = segments
-                            .iter()
-                            .find(|segment| segment.ident.to_string() == "Vec".to_string())
+                        if let Some(segment) =
+                            segments.iter().find(|segment| segment.ident == "Vec")
                         {
                             angle_bracketed_inner_type_from_segment(segment)
                                 .expect("Expected inner type for Vec<>")
