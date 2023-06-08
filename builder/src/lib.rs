@@ -188,6 +188,7 @@ fn generate_attr_methods(
                         unimplemented!();
                     };
 
+                    // neat! we can parse a string directly into a tokenstream
                     let new_fn_ident: proc_macro2::TokenStream = new_fn_ident.parse().unwrap();
                     quote::quote! {
                         fn #new_fn_ident(&mut self, #new_fn_ident: #inner_type) -> &mut Self {

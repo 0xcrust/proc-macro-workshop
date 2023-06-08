@@ -6,17 +6,23 @@
 // To run the code:
 //     $ cargo run
 
-use derive_builder::Builder;
+use derive_debug::CustomDebug;
 
-type Option = ();
-type Some = ();
-type None = ();
-type Result = ();
-type Box = ();
-
-#[derive(Builder)]
-pub struct Command {
-    executable: String,
+#[derive(CustomDebug)]
+pub struct Field<T> {
+    value: T,
+    #[debug = "0b{:08b}"]
+    bitmask: u8,
 }
 
-fn main() {}
+fn main() {
+    let f = Field {
+        value: "F",
+        bitmask: 0b00011100,
+    };
+
+    let debug = format!("{:?}", f);
+    let expected = r#"Field { value: "F", bitmask: 0b00011100 }"#;
+
+    assert_eq!(debug, expected);
+}
