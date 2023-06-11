@@ -7,18 +7,19 @@ pub fn sorted(args: TokenStream, input: TokenStream) -> TokenStream {
     let _ = input;
 
     let parsed = syn::parse_macro_input!(input as syn::Item);
-    match __sorted(args, parsed) {
-        Ok(res) => res,
-        Err(e) => e.to_compile_error().into(),
+
+    match __sorted(args, &parsed) {
+        Ok(()) => TokenStream::from(quote::quote! {#parsed}),
+        Err(e) => {
+            let e = e.to_compile_error();
+            TokenStream::from(quote::quote! {#parsed #e})
+        }
     }
 }
 
-fn __sorted(args: TokenStream, input: syn::Item) -> Result<TokenStream, syn::Error> {
-    let _ = args;
-    let _ = input;
-
-    let variants = match input {
-        syn::Item::Enum(item) => item.variants,
+fn __sorted(_args: TokenStream, parsed: &syn::Item) -> Result<(), syn::Error> {
+    let variants = match parsed {
+        syn::Item::Enum(item) => &item.variants,
         _ => {
             return Err(syn::Error::new(
                 proc_macro2::Span::call_site(),
@@ -43,5 +44,5 @@ fn __sorted(args: TokenStream, input: syn::Item) -> Result<TokenStream, syn::Err
         }
     }
 
-    Ok(TokenStream::new())
+    Ok(())
 }
