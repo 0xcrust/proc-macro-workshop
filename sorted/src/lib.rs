@@ -1,4 +1,5 @@
 use proc_macro::TokenStream;
+use quote::ToTokens;
 use syn::spanned::Spanned;
 
 #[proc_macro_attribute]
@@ -28,42 +29,111 @@ pub fn check(_args: TokenStream, input: TokenStream) -> TokenStream {
                 }
             });
 
+            #[derive(Clone)]
+            struct Triplet {
+                ident: syn::Ident,
+                tokens: proc_macro2::TokenStream,
+                fq_path: String,
+            }
+            impl Triplet {
+                pub fn new(
+                    ident: syn::Ident,
+                    tokens: proc_macro2::TokenStream,
+                    fq_path: String,
+                ) -> Self {
+                    Triplet {
+                        ident,
+                        tokens,
+                        fq_path,
+                    }
+                }
+                pub fn from_path(path: &syn::Path) -> Self {
+                    let ident = &path
+                        .segments
+                        .last()
+                        .expect("expected at least a path")
+                        .ident;
+                    Triplet::new(
+                        ident.clone(),
+                        path.to_token_stream(),
+                        full_path(&path.segments),
+                    )
+                }
+            }
+
+            fn full_path<T>(segments: &syn::punctuated::Punctuated<syn::PathSegment, T>) -> String {
+                let mut qualified = String::new();
+
+                for x in 0..segments.len() {
+                    qualified.push_str(&format!("{}", segments[x].ident));
+                    if x != segments.len() - 1 {
+                        qualified.push_str("::");
+                    }
+                }
+
+                qualified
+            }
+
             if let Some((index, path)) = attr_index {
-                if dbg!(&path.segments[0].ident) == "sorted" {
-                    let arms = node
-                        .arms
-                        .iter()
-                        .map(|arm| {
-                            if let syn::Pat::TupleStruct(syn::PatTupleStruct { path, .. }) =
-                                &arm.pat
-                            {
-                                let ident = &path
-                                    .segments
-                                    .last()
-                                    .expect("expected at least a path")
-                                    .ident;
-                                (ident, path)
-                            } else {
-                                panic!("sorted is unimplemented for non-enum match")
+                if &path.segments[0].ident == "sorted" {
+                    node.attrs.remove(index);
+                    let mut unsorted = vec![];
+                    let mut arms_iter = node.arms.iter();
+                    let unsupported_err = |arm: &syn::Arm| {
+                        syn::Error::new(arm.pat.span(), "unsupported by #[sorted]")
+                            .to_compile_error()
+                    };
+
+                    while let Some(arm) = arms_iter.next() {
+                        let pattern = match &arm.pat {
+                            syn::Pat::Ident(syn::PatIdent { ident, .. }) => Triplet::new(
+                                ident.clone(),
+                                arm.pat.to_token_stream(),
+                                ident.to_string(),
+                            ),
+                            syn::Pat::TupleStruct(syn::PatTupleStruct { path, .. }) => {
+                                Triplet::from_path(path)
                             }
-                        })
-                        .collect::<Vec<_>>();
+                            syn::Pat::Path(syn::PatPath { path, .. }) => Triplet::from_path(path),
+                            syn::Pat::Struct(syn::PatStruct { path, .. }) => {
+                                Triplet::from_path(path)
+                            }
+                            syn::Pat::Wild(_) => {
+                                if arms_iter.next().is_some() {
+                                    let err = unsupported_err(arm);
+                                    self.ts.extend(std::iter::once(quote::quote! {#err}));
+                                    return;
+                                } else {
+                                    break;
+                                }
+                            }
+                            _ => {
+                                let err = unsupported_err(arm);
+                                self.ts.extend(std::iter::once(quote::quote! {#err}));
+                                return;
+                            }
+                        };
 
-                    let mut sorted = arms.clone();
-                    sorted.sort_by(|a, b| a.0.cmp(b.0));
+                        unsorted.push(pattern)
+                    }
 
-                    for i in 0..arms.len() {
-                        if arms[i].0 != sorted[i].0 {
-                            let err = syn::Error::new(
-                                sorted[i].1.span(),
-                                format!("{} should sort before {}", sorted[i].0, arms[i].0),
+                    let mut sorted = unsorted.clone();
+                    sorted.sort_by(|a, b| a.ident.cmp(&b.ident));
+
+                    for i in 0..unsorted.len() {
+                        if unsorted[i].ident != sorted[i].ident {
+                            let err = syn::Error::new_spanned(
+                                sorted[i].tokens.clone(),
+                                format!(
+                                    "{} should sort before {}",
+                                    sorted[i].fq_path, unsorted[i].fq_path
+                                ),
                             )
                             .to_compile_error();
                             self.ts.extend(std::iter::once(quote::quote! {#err}));
                             break;
                         }
                     }
-                    node.attrs.remove(index);
                 }
             }
             syn::visit_mut::visit_expr_match_mut(self, node);
