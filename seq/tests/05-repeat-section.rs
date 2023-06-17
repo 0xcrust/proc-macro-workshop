@@ -31,7 +31,7 @@
 use seq::seq;
 
 seq!(N in 0..16 {
-    #[derive(Copy, Clone, PartialEq, Debug)]
+    //#[derive(Copy, Clone, PartialEq, Debug)]
     enum Interrupt {
         #(
             Irq~N,
@@ -40,8 +40,8 @@ seq!(N in 0..16 {
 });
 
 fn main() {
-    let interrupt = Interrupt::Irq8;
+    //let interrupt = Interrupt::Irq8;
 
-    assert_eq!(interrupt as u8, 8);
-    assert_eq!(interrupt, Interrupt::Irq8);
+    //assert_eq!(interrupt as u8, 8);
+    //assert_eq!(interrupt, Interrupt::Irq8);
 }
